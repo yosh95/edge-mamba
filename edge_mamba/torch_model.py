@@ -1,4 +1,5 @@
 import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -16,7 +17,7 @@ class Mamba(nn.Module):
         dt_scale=1.0,
         dt_init_floor=1e-4,
         bias=False,
-        conv_bias=True
+        conv_bias=True,
     ):
         super().__init__()
 
