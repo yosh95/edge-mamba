@@ -16,8 +16,7 @@ class Mamba(nn.Module):
         dt_scale=1.0,
         dt_init_floor=1e-4,
         bias=False,
-        conv_bias=True,
-        use_official=False,
+        conv_bias=True
     ):
         super().__init__()
 
@@ -37,6 +36,9 @@ class Mamba(nn.Module):
     def forward(self, x):
         return self.mamba(x)
 
+    def step(self, x, conv_state, ssm_state):
+        return self.mamba.step(x, conv_state, ssm_state)
+
 
 class CustomMamba(nn.Module):
     def __init__(
@@ -55,8 +57,9 @@ class CustomMamba(nn.Module):
         super().__init__()
 
         d_inner = expand * d_model
-
+        self.d_inner = d_inner
         self.d_state = d_state
+        self.d_conv = d_conv
 
         dt_rank = math.ceil(d_model / 16)
         self.dt_rank = dt_rank
@@ -119,6 +122,64 @@ class CustomMamba(nn.Module):
         output = self.out_proj(output)
 
         return output
+
+    def step(self, x, conv_state, ssm_state):
+        # x: (B, D_model)
+        # conv_state: (B, D_inner, d_conv)
+        # ssm_state: (B, D_inner, d_state)
+
+        xz = self.in_proj(x)
+        x, z = xz.chunk(2, dim=-1)
+
+        # Convolution Step
+        if conv_state is None:
+            conv_state = torch.zeros(
+                x.shape[0], self.d_inner, self.d_conv, device=x.device
+            )
+
+        conv_state = torch.roll(conv_state, shifts=-1, dims=-1)
+        conv_state[:, :, -1] = x
+
+        if self.conv1d.bias is not None:
+            conv_bias = self.conv1d.bias
+        else:
+            conv_bias = 0
+
+        # Convolution: (B, D, K) * (D, 1, K) -> sum over K -> (B, D)
+        weight = self.conv1d.weight.squeeze(1)
+        x_conv = torch.sum(conv_state * weight, dim=-1) + conv_bias
+        x_conv = F.silu(x_conv)
+
+        # SSM Step
+        A = -torch.exp(self.A_log.float())
+        D = self.D.float()
+
+        deltaBC = self.x_proj(x_conv)
+        delta, B, C = torch.split(
+            deltaBC, [self.dt_rank, self.d_state, self.d_state], dim=-1
+        )
+
+        delta = F.linear(delta, self.dt_proj.weight, self.dt_proj.bias)
+        delta = F.softplus(delta)
+
+        deltaA = torch.exp(delta.unsqueeze(-1) * A)
+        deltaB = delta.unsqueeze(-1) * B.unsqueeze(1)
+
+        if ssm_state is None:
+            ssm_state = torch.zeros(
+                x.shape[0], self.d_inner, self.d_state, device=x.device
+            )
+
+        ssm_state = deltaA * ssm_state + deltaB * x_conv.unsqueeze(-1)
+
+        y = torch.sum(ssm_state * C.unsqueeze(1), dim=-1)
+        y = y + D * x_conv
+
+        z = F.silu(z)
+        output = y * z
+        output = self.out_proj(output)
+
+        return output, conv_state, ssm_state
 
     def ssm(self, x):
         A = -torch.exp(self.A_log.float())
