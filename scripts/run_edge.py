@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import numpy as np
 
@@ -8,7 +8,7 @@ from edge_mamba.numpy_model import MambaConfig, MambaNumpy
 def run_inference() -> None:
     weights_path = "mamba_weights.npz"
 
-    if not os.path.exists(weights_path):
+    if not Path.exists(weights_path):
         print(f"Error: {weights_path} not found. Please run export_to_numpy.py first.")
         return
 

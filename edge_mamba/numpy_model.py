@@ -272,4 +272,3 @@ class MambaNumpy:
             output += self.params["out_proj.bias"]
 
         return output, conv_state, ssm_state, current_Bx
-

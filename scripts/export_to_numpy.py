@@ -1,4 +1,4 @@
-import os
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -7,7 +7,7 @@ import torch
 def export_weights(
     pth_path: str = "mamba_model.pth", npz_path: str = "mamba_weights.npz"
 ) -> None:
-    if not os.path.exists(pth_path):
+    if not Path.exists(pth_path):
         print(f"Error: {pth_path} not found. Please run train.py first.")
         return
 

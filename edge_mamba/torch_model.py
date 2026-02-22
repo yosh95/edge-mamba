@@ -282,5 +282,3 @@ class PScanComplex(torch.autograd.Function):
                 grad_A[:, t] = grad_X[:, t] * res[:, t - 1].conj()
             gh = grad_X[:, t] * A[:, t].conj()
         return grad_A, grad_X
-
-
