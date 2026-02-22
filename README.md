@@ -38,26 +38,26 @@ This installs `torch` and `numpy`.
 #### 1. Train (Development Environment)
 Train your model using PyTorch. This generates `mamba_model.pth`.
 ```bash
-python train.py
+python scripts/train.py
 ```
 
 #### 2. Export Weights (Development Environment)
 Convert the trained PyTorch weights to a NumPy-compatible format (`mamba_weights.npz`).
 ```bash
-python export_to_numpy.py
+python scripts/export_to_numpy.py
 ```
 
 #### 3. Inference (Edge Device)
 Transfer `mamba_numpy.py`, `run_edge.py`, and `mamba_weights.npz` to your edge device. Then run:
 ```bash
-python run_edge.py
+python scripts/run_edge.py
 ```
 This script does **not** import torch.
 
 ### Testing
 To verify that the NumPy implementation matches the PyTorch implementation exactly:
 ```bash
-python test_mamba.py
+python tests/test_consistency.py
 ```
 
 ---
@@ -98,24 +98,24 @@ pip install .[dev]
 #### 1. 学習（開発環境）
 PyTorchを使ってモデルを学習させます。`mamba_model.pth` が生成されます。
 ```bash
-python train.py
+python scripts/train.py
 ```
 
 #### 2. 重みの変換（開発環境）
 学習済みのPyTorchの重みを、NumPyで読み込める形式（`mamba_weights.npz`）に変換します。
 ```bash
-python export_to_numpy.py
+python scripts/export_to_numpy.py
 ```
 
 #### 3. 推論（エッジデバイス）
 `mamba_numpy.py`、`run_edge.py`、`mamba_weights.npz` の3ファイルをエッジデバイスに転送し、実行します。
 ```bash
-python run_edge.py
+python scripts/run_edge.py
 ```
 このスクリプトは `torch` を一切インポートせずに動作します。
 
 ### テスト
 NumPy版の実装がPyTorch版と完全に同じ結果を出すか確認するには、以下を実行します。
 ```bash
-python test_mamba.py
+python tests/test_consistency.py
 ```
