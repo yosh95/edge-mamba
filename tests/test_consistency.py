@@ -8,7 +8,7 @@ from edge_mamba.torch_model import Mamba as MambaTorch
 
 
 class TestMambaImplementation(unittest.TestCase):
-    def test_output_consistency(self):
+    def test_output_consistency(self) -> None:
         # Config
         d_model = 32
         d_state = 8

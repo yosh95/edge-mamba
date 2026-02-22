@@ -1,34 +1,35 @@
 import math
+from typing import Any
 
 import numpy as np
 
 
-def silu(x):
-    return x * (1.0 / (1.0 + np.exp(-x)))
+def silu(x: np.ndarray) -> np.ndarray:
+    return x * (1.0 / (1.0 + np.exp(-x)))  # type: ignore
 
 
-def softplus(x):
-    return np.log1p(np.exp(-np.abs(x))) + np.maximum(x, 0)
+def softplus(x: np.ndarray) -> np.ndarray:
+    return np.log1p(np.exp(-np.abs(x))) + np.maximum(x, 0)  # type: ignore
 
 
-def sigmoid(x):
-    return 1.0 / (1.0 + np.exp(-x))
+def sigmoid(x: np.ndarray) -> np.ndarray:
+    return 1.0 / (1.0 + np.exp(-x))  # type: ignore
 
 
 class MambaConfig:
     def __init__(
         self,
-        d_model=128,
-        d_state=16,
-        d_conv=3,
-        expand=2,
-        dt_min=0.001,
-        dt_max=0.1,
-        dt_scale=1.0,
-        dt_init_floor=1e-4,
-        bias=False,
-        conv_bias=True,
-    ):
+        d_model: int = 128,
+        d_state: int = 16,
+        d_conv: int = 3,
+        expand: int = 2,
+        dt_min: float = 0.001,
+        dt_max: float = 0.1,
+        dt_scale: float = 1.0,
+        dt_init_floor: float = 1e-4,
+        bias: bool = False,
+        conv_bias: bool = True,
+    ) -> None:
         self.d_model = d_model
         self.d_state = d_state
         self.d_conv = d_conv
@@ -49,7 +50,7 @@ class MambaNumpy:
         self.params: dict[str, np.ndarray] = {}
         self._init_random_params()
 
-    def _init_random_params(self):
+    def _init_random_params(self) -> None:
         c = self.config
         rng = np.random.default_rng(42)
 
@@ -85,7 +86,7 @@ class MambaNumpy:
         if c.bias:
             self.params["out_proj.bias"] = np.zeros(c.d_model)
 
-    def load_state_dict(self, state_dict):
+    def load_state_dict(self, state_dict: dict[str, Any]) -> None:
         for k, v in state_dict.items():
             clean_k = k.replace("mamba.", "")
             if clean_k in self.params:
@@ -95,7 +96,7 @@ class MambaNumpy:
                 elif clean_k == "conv1d.weight" and v_np.ndim == 3:
                     self.params[clean_k] = v_np.squeeze(1)
 
-    def forward(self, x):
+    def forward(self, x: np.ndarray) -> np.ndarray:
         B, L, _ = x.shape
         c = self.config
 
@@ -132,9 +133,9 @@ class MambaNumpy:
         if "out_proj.bias" in self.params:
             output += self.params["out_proj.bias"]
 
-        return output
+        return output  # type: ignore
 
-    def ssm(self, x):
+    def ssm(self, x: np.ndarray) -> np.ndarray:
         B, L, D_inner = x.shape
         c = self.config
 
@@ -162,7 +163,15 @@ class MambaNumpy:
         y = self.selective_scan_v3(x, delta, A, B_complex, C_complex, lambda_gate)
         return y
 
-    def selective_scan_v3(self, x, delta, A, B, C, lambda_gate):
+    def selective_scan_v3(
+        self,
+        x: np.ndarray,
+        delta: np.ndarray,
+        A: np.ndarray,
+        B: np.ndarray,
+        C: np.ndarray,
+        lambda_gate: np.ndarray,
+    ) -> np.ndarray:
         bs, L, d_inner = x.shape
         d_state = self.config.d_state
 
@@ -195,9 +204,15 @@ class MambaNumpy:
         y = np.stack(ys, axis=1)
         y = y + self.params["D"][None, None, :] * x
 
-        return y
+        return y  # type: ignore
 
-    def step(self, x, conv_state, ssm_state, prev_Bx):
+    def step(
+        self,
+        x: np.ndarray,
+        conv_state: np.ndarray | None,
+        ssm_state: np.ndarray | None,
+        prev_Bx: np.ndarray | None,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         # x: (B, D_model)
         c = self.config
 
@@ -257,3 +272,4 @@ class MambaNumpy:
             output += self.params["out_proj.bias"]
 
         return output, conv_state, ssm_state, current_Bx
+

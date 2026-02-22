@@ -5,7 +5,7 @@ import torch.optim as optim
 from edge_mamba.torch_model import Mamba
 
 
-def train():
+def train() -> None:
     # Configuration
     d_model = 64
     d_state = 16

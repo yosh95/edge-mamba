@@ -5,7 +5,7 @@ import numpy as np
 from edge_mamba.numpy_model import MambaConfig, MambaNumpy
 
 
-def run_inference():
+def run_inference() -> None:
     weights_path = "mamba_weights.npz"
 
     if not os.path.exists(weights_path):

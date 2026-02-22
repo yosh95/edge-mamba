@@ -1,24 +1,26 @@
 import math
+from typing import Any
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch import Tensor
 
 
 class Mamba(nn.Module):
     def __init__(
         self,
-        d_model=128,
-        d_state=16,
-        d_conv=3,
-        expand=2,
-        dt_min=0.001,
-        dt_max=0.1,
-        dt_scale=1.0,
-        dt_init_floor=1e-4,
-        bias=False,
-        conv_bias=True,
-    ):
+        d_model: int = 128,
+        d_state: int = 16,
+        d_conv: int = 3,
+        expand: int = 2,
+        dt_min: float = 0.001,
+        dt_max: float = 0.1,
+        dt_scale: float = 1.0,
+        dt_init_floor: float = 1e-4,
+        bias: bool = False,
+        conv_bias: bool = True,
+    ) -> None:
         super().__init__()
         self.mamba = CustomMamba(
             d_model=d_model,
@@ -33,10 +35,16 @@ class Mamba(nn.Module):
             conv_bias=conv_bias,
         )
 
-    def forward(self, x):
-        return self.mamba(x)
+    def forward(self, x: Tensor) -> Tensor:
+        return self.mamba(x)  # type: ignore
 
-    def step(self, x, conv_state, ssm_state, prev_Bx):
+    def step(
+        self,
+        x: Tensor,
+        conv_state: Tensor | None,
+        ssm_state: Tensor | None,
+        prev_Bx: Tensor | None,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Mamba-3 inference step with Trapezoidal Discretization.
         Returns: (output, conv_state, ssm_state, current_Bx)
@@ -47,17 +55,17 @@ class Mamba(nn.Module):
 class CustomMamba(nn.Module):
     def __init__(
         self,
-        d_model=128,
-        d_state=16,
-        d_conv=3,
-        expand=2,
-        dt_min=0.001,
-        dt_max=0.1,
-        dt_scale=1.0,
-        dt_init_floor=1e-4,
-        bias=False,
-        conv_bias=True,
-    ):
+        d_model: int = 128,
+        d_state: int = 16,
+        d_conv: int = 3,
+        expand: int = 2,
+        dt_min: float = 0.001,
+        dt_max: float = 0.1,
+        dt_scale: float = 1.0,
+        dt_init_floor: float = 1e-4,
+        bias: bool = False,
+        conv_bias: bool = True,
+    ) -> None:
         super().__init__()
 
         self.d_inner = expand * d_model
@@ -102,23 +110,23 @@ class CustomMamba(nn.Module):
         self.D = nn.Parameter(torch.ones(self.d_inner))
         self.out_proj = nn.Linear(self.d_inner, d_model, bias=bias)
 
-    def forward(self, x):
+    def forward(self, x: Tensor) -> Tensor:
         batch, seq_len, _ = x.shape
 
         xz = self.in_proj(x)
-        x, z = xz.chunk(2, dim=-1)
+        x_proj, z = xz.chunk(2, dim=-1)
 
-        x = x.transpose(1, 2)
-        x = self.conv1d(x)[:, :, :seq_len]
-        x = x.transpose(1, 2)
-        x = F.silu(x)
+        x_proj = x_proj.transpose(1, 2)
+        x_proj = self.conv1d(x_proj)[:, :, :seq_len]
+        x_proj = x_proj.transpose(1, 2)
+        x_proj = F.silu(x_proj)
 
         # SSM Params
         A_real = -torch.exp(self.A_log.float())
         A_imag = self.A_imag.float()
         A = torch.complex(A_real, A_imag)
 
-        proj_out = self.x_proj(x)
+        proj_out = self.x_proj(x_proj)
         delta_raw, B_re, B_im, C_re, C_im, lambda_gate = torch.split(
             proj_out,
             [self.dt_rank, self.d_state, self.d_state, self.d_state, self.d_state, 1],
@@ -132,14 +140,22 @@ class CustomMamba(nn.Module):
         B = torch.complex(B_re, B_im)
         C = torch.complex(C_re, C_im)
 
-        y = self.selective_scan_v3(x, delta, A, B, C, lambda_gate)
+        y = self.selective_scan_v3(x_proj, delta, A, B, C, lambda_gate)
 
         z = F.silu(z)
         output = y * z
         output = self.out_proj(output)
-        return output
+        return output  # type: ignore
 
-    def selective_scan_v3(self, x, delta, A, B, C, lambda_gate):
+    def selective_scan_v3(
+        self,
+        x: Tensor,
+        delta: Tensor,
+        A: Tensor,
+        B: Tensor,
+        C: Tensor,
+        lambda_gate: Tensor,
+    ) -> Tensor:
         # 1. Discretization
         # alpha = exp(delta * A)
         dtA = delta.unsqueeze(-1) * A.unsqueeze(0).unsqueeze(0)
@@ -165,9 +181,15 @@ class CustomMamba(nn.Module):
         y_complex = (hs * C.unsqueeze(2).conj()).sum(dim=-1)
         y = y_complex.real
         y = y + self.D * x
-        return y
+        return y  # type: ignore
 
-    def step(self, x, conv_state, ssm_state, prev_Bx):
+    def step(
+        self,
+        x: Tensor,
+        conv_state: Tensor | None,
+        ssm_state: Tensor | None,
+        prev_Bx: Tensor | None,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
         batch = x.shape[0]
         xz = self.in_proj(x)
         x_in, z = xz.chunk(2, dim=-1)
@@ -229,12 +251,12 @@ class CustomMamba(nn.Module):
         output = y * z
         output = self.out_proj(output)
 
-        return output, conv_state, ssm_state, current_Bx
+        return output, conv_state, ssm_state, current_Bx  # type: ignore
 
 
 class PScanComplex(torch.autograd.Function):
     @staticmethod
-    def forward(ctx, A, X):
+    def forward(ctx: Any, A: Tensor, X: Tensor) -> Tensor:
         # A: (B, L, D, N) Complex
         # X: (B, L, D, N) Complex
         # Sequential implementation for correctness in edge-mamba
@@ -248,7 +270,7 @@ class PScanComplex(torch.autograd.Function):
         return res
 
     @staticmethod
-    def backward(ctx, grad_output):
+    def backward(ctx: Any, grad_output: Tensor) -> tuple[Tensor | None, Tensor | None]:
         A, X, res = ctx.saved_tensors
         B, L, D, N = grad_output.shape
         grad_X = torch.zeros_like(X)
@@ -260,3 +282,5 @@ class PScanComplex(torch.autograd.Function):
                 grad_A[:, t] = grad_X[:, t] * res[:, t - 1].conj()
             gh = grad_X[:, t] * A[:, t].conj()
         return grad_A, grad_X
+
+
