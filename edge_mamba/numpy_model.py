@@ -213,13 +213,17 @@ class MambaNumpy:
         ssm_state: np.ndarray | None,
         prev_Bx: np.ndarray | None,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-        # x: (B, D_model)
+        # x: (B, 1, D_model)
         c = self.config
 
         xz = x @ self.params["in_proj.weight"].T
         if "in_proj.bias" in self.params:
             xz += self.params["in_proj.bias"]
         x_in, z = np.split(xz, 2, axis=-1)
+
+        # Squeeze sequence dimension for processing one token
+        x_in = x_in.squeeze(1)
+        z = z.squeeze(1)
 
         # Conv
         if conv_state is None:
@@ -271,4 +275,4 @@ class MambaNumpy:
         if "out_proj.bias" in self.params:
             output += self.params["out_proj.bias"]
 
-        return output, conv_state, ssm_state, current_Bx
+        return output[:, np.newaxis, :], conv_state, ssm_state, current_Bx

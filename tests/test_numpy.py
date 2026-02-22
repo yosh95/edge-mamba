@@ -17,5 +17,20 @@ def test_inference_only() -> None:
     print("Inference test passed!")
 
 
+def test_step() -> None:
+    config = MambaConfig(d_model=16, d_state=4, d_conv=3, expand=2)
+    model = MambaNumpy(config)
+
+    x = np.random.randn(1, 1, 16)  # Batch=1, Seq=1, Dim=16
+    out, conv_state, ssm_state, prev_Bx = model.step(x, None, None, None)
+
+    print(f"Step Input shape: {x.shape}")
+    print(f"Step Output shape: {out.shape}")
+
+    assert out.shape == (1, 1, 16)
+    print("Step test passed!")
+
+
 if __name__ == "__main__":
     test_inference_only()
+    test_step()

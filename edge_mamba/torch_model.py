@@ -194,6 +194,10 @@ class CustomMamba(nn.Module):
         xz = self.in_proj(x)
         x_in, z = xz.chunk(2, dim=-1)
 
+        # Squeeze sequence dimension for processing one token
+        x_in = x_in.squeeze(1)
+        z = z.squeeze(1)
+
         # Conv
         if conv_state is None:
             conv_state = torch.zeros(batch, self.d_inner, self.d_conv, device=x.device)
@@ -251,7 +255,7 @@ class CustomMamba(nn.Module):
         output = y * z
         output = self.out_proj(output)
 
-        return output, conv_state, ssm_state, current_Bx  # type: ignore
+        return output.unsqueeze(1), conv_state, ssm_state, current_Bx  # type: ignore
 
 
 class PScanComplex(torch.autograd.Function):
