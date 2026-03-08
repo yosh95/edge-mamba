@@ -64,8 +64,8 @@ class MambaNumpy:
         if c.conv_bias:
             self.params["conv1d.bias"] = np.zeros(c.d_inner)
 
-        # Mamba-3 x_proj: dt_rank + 4*d_state + 1
-        out_dim = c.dt_rank + 4 * c.d_state + 1
+        # Mamba-3 x_proj: dt_rank + 4*d_state + 2
+        out_dim = c.dt_rank + 4 * c.d_state + 2
         self.params["x_proj.weight"] = rng.standard_normal((out_dim, c.d_inner)) * 0.02
 
         self.params["dt_proj.weight"] = (
@@ -150,7 +150,8 @@ class MambaNumpy:
         B_im = proj_out[..., c.dt_rank + c.d_state : c.dt_rank + 2 * c.d_state]
         C_re = proj_out[..., c.dt_rank + 2 * c.d_state : c.dt_rank + 3 * c.d_state]
         C_im = proj_out[..., c.dt_rank + 3 * c.d_state : c.dt_rank + 4 * c.d_state]
-        lambda_gate = sigmoid(proj_out[..., -1:])
+        lambda_gate = sigmoid(proj_out[..., -2:-1])
+        evo_gate = sigmoid(proj_out[..., -1:])
 
         delta = (
             delta_proj @ self.params["dt_proj.weight"].T + self.params["dt_proj.bias"]
@@ -160,7 +161,7 @@ class MambaNumpy:
         B_complex = B_re + 1j * B_im
         C_complex = C_re + 1j * C_im
 
-        y = self.selective_scan_v3(x, delta, A, B_complex, C_complex, lambda_gate)
+        y = self.selective_scan_v3(x, delta, A, B_complex, C_complex, lambda_gate, evo_gate)
         return y
 
     def selective_scan_v3(
@@ -171,33 +172,36 @@ class MambaNumpy:
         B: np.ndarray,
         C: np.ndarray,
         lambda_gate: np.ndarray,
+        evo_gate: np.ndarray,
     ) -> np.ndarray:
         bs, L, d_inner = x.shape
         d_state = self.config.d_state
 
-        # alpha = exp(delta * A)
-        alpha = np.exp(delta[:, :, :, None] * A[None, None, :, :])  # (B, L, D, N)
-
-        # Bx_t = B_t * x_t (MIMO broadcasting)
-        # B: (B, L, N), x: (B, L, D) -> (B, L, D, N)
-        Bx = B[:, :, None, :] * x[:, :, :, None]
-
-        # Trapezoidal Terms
-        beta = (1 - lambda_gate[:, :, :, None]) * delta[:, :, :, None] * alpha
-        gamma = lambda_gate[:, :, :, None] * delta[:, :, :, None]
-
-        # Shift Bx for previous term
-        Bx_prev = np.zeros_like(Bx)
-        Bx_prev[:, 1:] = Bx[:, :-1]
-
-        u = beta * Bx_prev + gamma * Bx
-
         h = np.zeros((bs, d_inner, d_state), dtype=np.complex64)
+        prev_Bx = np.zeros_like(h)
         ys = []
 
         for t in range(L):
-            h = alpha[:, t] * h + u[:, t]
-            # y = Re(sum(h * conj(C)))
+            # 1. Discretization
+            dt = delta[:, t, :, None]
+            alpha = np.exp(dt * A[None, :, :])
+            
+            # 2. SASM / MIMO: Bx_t = x_t * B_t
+            # current_Bx: (B, D, N)
+            current_Bx = x[:, t, :, None] * B[:, t, None, :]
+
+            # 3. Trapezoidal Terms with Evo Gate
+            l_gate = lambda_gate[:, t, :, None]
+            e_gate = evo_gate[:, t, :, None]
+            
+            beta = (1.0 - l_gate) * dt * alpha
+            gamma = l_gate * dt * e_gate
+            
+            # 4. State Update
+            h = alpha * h + beta * prev_Bx + gamma * current_Bx
+            prev_Bx = current_Bx
+            
+            # 5. Output
             y_curr = np.sum(h * np.conj(C[:, t, None, :]), axis=-1)
             ys.append(y_curr.real)
 
@@ -243,7 +247,8 @@ class MambaNumpy:
         B_im = proj_out[..., c.dt_rank + c.d_state : c.dt_rank + 2 * c.d_state]
         C_re = proj_out[..., c.dt_rank + 2 * c.d_state : c.dt_rank + 3 * c.d_state]
         C_im = proj_out[..., c.dt_rank + 3 * c.d_state : c.dt_rank + 4 * c.d_state]
-        lambda_gate = sigmoid(proj_out[..., -1:])
+        lambda_gate = sigmoid(proj_out[..., -2:-1])
+        evo_gate = sigmoid(proj_out[..., -1:])
 
         delta = (
             delta_proj @ self.params["dt_proj.weight"].T + self.params["dt_proj.bias"]
@@ -254,17 +259,21 @@ class MambaNumpy:
         B = B_re + 1j * B_im
         C = C_re + 1j * C_im
 
-        alpha = np.exp(delta[:, :, None] * A[None, :, :])
-        current_Bx = B[:, None, :] * x_conv[:, :, None]
+        dt = delta[:, :, None]
+        alpha = np.exp(dt * A[None, :, :])
+        current_Bx = x_conv[:, :, None] * B[:, None, :] # SASM: (B, D, N)
 
         if ssm_state is None:
             ssm_state = np.zeros((x.shape[0], c.d_inner, c.d_state), dtype=np.complex64)
         if prev_Bx is None:
             prev_Bx = np.zeros_like(current_Bx)
 
-        # Trapezoidal
-        beta = (1 - lambda_gate[:, :, None]) * delta[:, :, None] * alpha
-        gamma = lambda_gate[:, :, None] * delta[:, :, None]
+        # Trapezoidal with Evo Gate
+        l_gate = lambda_gate[:, :, None]
+        e_gate = evo_gate[:, :, None]
+        
+        beta = (1.0 - l_gate) * dt * alpha
+        gamma = l_gate * dt * e_gate
 
         ssm_state = alpha * ssm_state + beta * prev_Bx + gamma * current_Bx
 
