@@ -12,7 +12,7 @@ def export_weights(
         return
 
     print(f"Loading weights from {pth_path}...")
-    state_dict = torch.load(pth_path, map_location="cpu")
+    state_dict = torch.load(pth_path, map_location="cpu", weights_only=True)
 
     numpy_dict = {}
     for k, v in state_dict.items():

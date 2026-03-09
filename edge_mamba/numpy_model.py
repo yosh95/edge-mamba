@@ -161,7 +161,9 @@ class MambaNumpy:
         B_complex = B_re + 1j * B_im
         C_complex = C_re + 1j * C_im
 
-        y = self.selective_scan_v3(x, delta, A, B_complex, C_complex, lambda_gate, evo_gate)
+        y = self.selective_scan_v3(
+            x, delta, A, B_complex, C_complex, lambda_gate, evo_gate
+        )
         return y
 
     def selective_scan_v3(
@@ -185,7 +187,7 @@ class MambaNumpy:
             # 1. Discretization
             dt = delta[:, t, :, None]
             alpha = np.exp(dt * A[None, :, :])
-            
+
             # 2. SASM / MIMO: Bx_t = x_t * B_t
             # current_Bx: (B, D, N)
             current_Bx = x[:, t, :, None] * B[:, t, None, :]
@@ -193,14 +195,14 @@ class MambaNumpy:
             # 3. Trapezoidal Terms with Evo Gate
             l_gate = lambda_gate[:, t, :, None]
             e_gate = evo_gate[:, t, :, None]
-            
+
             beta = (1.0 - l_gate) * dt * alpha
             gamma = l_gate * dt * e_gate
-            
+
             # 4. State Update
             h = alpha * h + beta * prev_Bx + gamma * current_Bx
             prev_Bx = current_Bx
-            
+
             # 5. Output
             y_curr = np.sum(h * np.conj(C[:, t, None, :]), axis=-1)
             ys.append(y_curr.real)
@@ -261,7 +263,7 @@ class MambaNumpy:
 
         dt = delta[:, :, None]
         alpha = np.exp(dt * A[None, :, :])
-        current_Bx = x_conv[:, :, None] * B[:, None, :] # SASM: (B, D, N)
+        current_Bx = x_conv[:, :, None] * B[:, None, :]  # SASM: (B, D, N)
 
         if ssm_state is None:
             ssm_state = np.zeros((x.shape[0], c.d_inner, c.d_state), dtype=np.complex64)
@@ -271,7 +273,7 @@ class MambaNumpy:
         # Trapezoidal with Evo Gate
         l_gate = lambda_gate[:, :, None]
         e_gate = evo_gate[:, :, None]
-        
+
         beta = (1.0 - l_gate) * dt * alpha
         gamma = l_gate * dt * e_gate
 
