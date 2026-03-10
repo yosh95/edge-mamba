@@ -5,28 +5,35 @@ import numpy as np
 
 # --- Activation Functions and Their Derivatives ---
 
+
 def silu(x: np.ndarray) -> np.ndarray:
     return cast(np.ndarray, x * (1.0 / (1.0 + np.exp(-x))))
+
 
 def silu_backward(x: np.ndarray, grad_output: np.ndarray) -> np.ndarray:
     """Derivative of SiLU: sigmoid(x) * (1 + x * (1 - sigmoid(x)))"""
     sig = 1.0 / (1.0 + np.exp(-x))
     return cast(np.ndarray, grad_output * (sig * (1.0 + x * (1.0 - sig))))
 
+
 def softplus(x: np.ndarray) -> np.ndarray:
     return cast(np.ndarray, np.log1p(np.exp(-np.abs(x))) + np.maximum(x, 0))
+
 
 def softplus_backward(x: np.ndarray, grad_output: np.ndarray) -> np.ndarray:
     """Derivative of softplus is sigmoid"""
     return cast(np.ndarray, grad_output * (1.0 / (1.0 + np.exp(-x))))
 
+
 def sigmoid(x: np.ndarray) -> np.ndarray:
     return cast(np.ndarray, 1.0 / (1.0 + np.exp(-x)))
+
 
 def sigmoid_backward(x: np.ndarray, grad_output: np.ndarray) -> np.ndarray:
     """Derivative of sigmoid: s * (1 - s)"""
     s = sigmoid(x)
     return cast(np.ndarray, grad_output * s * (1.0 - s))
+
 
 class MambaConfig:
     def __init__(
@@ -54,6 +61,7 @@ class MambaConfig:
         self.conv_bias = conv_bias
         self.d_inner = expand * d_model
         self.dt_rank = math.ceil(d_model / 16)
+
 
 class MambaNumpy:
     def __init__(self, config: MambaConfig):
@@ -113,7 +121,7 @@ class MambaNumpy:
         x_in, z = np.split(xz, 2, axis=-1)
 
         # 2. conv1d
-        x_t = x_in.transpose(0, 2, 1) # (B, D, L)
+        x_t = x_in.transpose(0, 2, 1)  # (B, D, L)
         padding = c.d_conv - 1
         x_padded = np.pad(x_t, ((0, 0), (0, 0), (padding, 0)), mode="constant")
 
@@ -219,7 +227,8 @@ class MambaNumpy:
         bs, L, d_inner = x.shape
         d_state = self.config.d_state
 
-        h = np.zeros((bs, d_inner, d_state), dtype=np.complex64)
+        # Use float128/complex128 for better numerical stability during scan
+        h = np.zeros((bs, d_inner, d_state), dtype=np.complex128)
         prev_Bx = np.zeros_like(h)
 
         hs, prev_Bxs, alphas, betas, gammas, current_Bxs = [], [], [], [], [], []
@@ -227,8 +236,12 @@ class MambaNumpy:
 
         for t in range(L):
             dt = delta[:, t, :, None]
-            alpha = np.exp(dt * A[None, :, :])
-            current_Bx = x[:, t, :, None] * B[:, t, None, :]
+            # Clip only the real part of the exponent to prevent numerical explosion
+            exponent = dt * A[None, :, :]
+            exponent_real = np.clip(exponent.real, -20.0, 20.0)
+            exponent = exponent_real + 1j * exponent.imag
+            alpha = np.exp(exponent).astype(np.complex128)
+            current_Bx = (x[:, t, :, None] * B[:, t, None, :]).astype(np.complex128)
 
             l_gate = lambda_gate[:, t, :, None]
             e_gate = evo_gate[:, t, :, None]
@@ -253,14 +266,18 @@ class MambaNumpy:
         y = np.stack(ys, axis=1)
         y = y + self.params["D"][None, None, :] * x
 
-        cache = {
-            "hs": hs,
-            "prev_Bxs": prev_Bxs,
-            "alphas": alphas,
-            "betas": betas,
-            "gammas": gammas,
-            "current_Bxs": current_Bxs,
-        } if training else {}
+        cache = (
+            {
+                "hs": hs,
+                "prev_Bxs": prev_Bxs,
+                "alphas": alphas,
+                "betas": betas,
+                "gammas": gammas,
+                "current_Bxs": current_Bxs,
+            }
+            if training
+            else {}
+        )
         return y, cache
 
     def step(
@@ -364,7 +381,9 @@ class MambaNumpy:
                     )
                 self.params[name] = val.copy()
 
-    def backward(self, grad_output: np.ndarray) -> dict[str, np.ndarray]:
+    def backward(
+        self, grad_output: np.ndarray
+    ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
         """Full backpropagation through the Mamba architecture"""
         cache = self.cache
 
@@ -399,7 +418,12 @@ class MambaNumpy:
         if "in_proj.bias" in self.params:
             self.grads["in_proj.bias"] = d_xz.sum(axis=(0, 1))
 
-        return self.grads
+        # d_xz is (B, L, 2 * d_inner)
+        # weight is (2 * d_inner, d_model)
+        # d_x is (B, L, d_model)
+        d_x = d_xz @ self.params["in_proj.weight"]
+
+        return d_x, self.grads
 
     def conv1d_backward(
         self, d_x_conv: np.ndarray
@@ -421,15 +445,11 @@ class MambaNumpy:
             )
 
         d_x_in = d_x_padded[:, :, c.d_conv - 1 :].transpose(0, 2, 1)
-        d_bias = (
-            d_x_conv.sum(axis=(0, 1)) if "conv1d.bias" in self.params else None
-        )
+        d_bias = d_x_conv.sum(axis=(0, 1)) if "conv1d.bias" in self.params else None
 
         return d_x_in, d_weight, d_bias
 
-    def ssm_backward(
-        self, d_y: np.ndarray
-    ) -> tuple[np.ndarray, dict[str, np.ndarray]]:
+    def ssm_backward(self, d_y: np.ndarray) -> tuple[np.ndarray, dict[str, np.ndarray]]:
         """Complete BPTT (Backpropagation Through Time) for Selective Scan"""
         c = self.config
         s_cache = self.cache["ssm"]
@@ -523,9 +543,7 @@ class MambaNumpy:
                 np.conj(d_c_Bx) * self.cache["x_conv"][:, t, :, None], axis=1
             )
             d_x_ssm_core[:, t, :] = np.real(
-                np.sum(
-                    d_c_Bx * np.conj(s_cache["B"][:, t, None, :]), axis=-1
-                )
+                np.sum(d_c_Bx * np.conj(s_cache["B"][:, t, None, :]), axis=-1)
             )
 
             # Gradients for the next iteration (t-1)
@@ -567,6 +585,7 @@ class MambaNumpy:
         self.grads["D"] = d_D
 
         return d_x_input + d_x_ssm_core, self.grads
+
 
 class AdamOptimizer:
     """Pure NumPy Adam Optimizer implementation"""

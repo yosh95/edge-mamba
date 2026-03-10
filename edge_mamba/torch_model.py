@@ -168,7 +168,9 @@ class CustomMamba(nn.Module):
     ) -> Tensor:
         # 1. Discretization
         dtA = delta.unsqueeze(-1) * A.unsqueeze(0).unsqueeze(0)
-        alpha = torch.exp(dtA)
+        # Clip only the real part to prevent numerical explosion
+        dtA_real = torch.clamp(dtA.real, min=-20.0, max=20.0)
+        alpha = torch.exp(torch.complex(dtA_real, dtA.imag))
 
         # 2. SASM Input Bx_t = x_t * B_t
         Bx = x.unsqueeze(-1) * B.unsqueeze(2)  # (B, L, D, N)
@@ -242,7 +244,9 @@ class CustomMamba(nn.Module):
         B = torch.complex(B_re, B_im)
         C = torch.complex(C_re, C_im)
 
-        alpha = torch.exp(delta.unsqueeze(-1) * A.unsqueeze(0))
+        dtA = delta.unsqueeze(-1) * A.unsqueeze(0)
+        dtA_real = torch.clamp(dtA.real, min=-20.0, max=20.0)
+        alpha = torch.exp(torch.complex(dtA_real, dtA.imag))
         current_Bx = x_conv.unsqueeze(-1) * B.unsqueeze(1)  # SASM: (B, D, N)
 
         if ssm_state is None:

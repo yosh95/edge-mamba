@@ -8,12 +8,7 @@ from edge_mamba.numpy_model import AdamOptimizer, MambaConfig, MambaNumpy
 def train_numpy() -> None:
     # 1. Configuration
     # Using a small configuration for demonstration
-    config = MambaConfig(
-        d_model=32,
-        d_state=8,
-        d_conv=3,
-        expand=2
-    )
+    config = MambaConfig(d_model=32, d_state=8, d_conv=3, expand=2)
 
     # 2. Initialize Model and Optimizer
     model = MambaNumpy(config)
@@ -40,12 +35,12 @@ def train_numpy() -> None:
         preds = model.forward(X, training=True)
 
         # --- Compute Loss (Mean Squared Error) ---
-        loss = np.mean((preds - Y_target)**2)
+        loss = np.mean((preds - Y_target) ** 2)
 
         # --- Backward Pass ---
         # Gradient of MSE loss: 2 * (preds - target) / total_elements
         grad_output = 2 * (preds - Y_target) / (B * L * D)
-        grads = model.backward(grad_output)
+        _, grads = model.backward(grad_output)
 
         # --- Parameter Update ---
         optimizer.step(grads)
@@ -56,6 +51,7 @@ def train_numpy() -> None:
 
     print("-" * 30)
     print("Training finished!")
+
 
 if __name__ == "__main__":
     train_numpy()

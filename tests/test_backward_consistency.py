@@ -17,13 +17,21 @@ class TestBackwardConsistency(unittest.TestCase):
         # 2. Initialize Models
         # Setting bias=False for simplicity in gradient mapping
         torch_model = MambaTorch(
-            d_model=d_model, d_state=d_state, d_conv=d_conv, expand=expand,
-            bias=False, conv_bias=False
+            d_model=d_model,
+            d_state=d_state,
+            d_conv=d_conv,
+            expand=expand,
+            bias=False,
+            conv_bias=False,
         )
 
         config = MambaConfig(
-            d_model=d_model, d_state=d_state, d_conv=d_conv, expand=expand,
-            bias=False, conv_bias=False
+            d_model=d_model,
+            d_state=d_state,
+            d_conv=d_conv,
+            expand=expand,
+            bias=False,
+            conv_bias=False,
         )
         numpy_model = MambaNumpy(config)
 
@@ -32,7 +40,9 @@ class TestBackwardConsistency(unittest.TestCase):
         sd = torch_model.state_dict()
         numpy_model.params["in_proj.weight"] = sd["mamba.in_proj.weight"].numpy()
         numpy_model.params["out_proj.weight"] = sd["mamba.out_proj.weight"].numpy()
-        numpy_model.params["conv1d.weight"] = sd["mamba.conv1d.weight"].squeeze(1).numpy()
+        numpy_model.params["conv1d.weight"] = (
+            sd["mamba.conv1d.weight"].squeeze(1).numpy()
+        )
         numpy_model.params["x_proj.weight"] = sd["mamba.x_proj.weight"].numpy()
         numpy_model.params["dt_proj.weight"] = sd["mamba.dt_proj.weight"].numpy()
         numpy_model.params["dt_proj.bias"] = sd["mamba.dt_proj.bias"].numpy()
@@ -49,7 +59,9 @@ class TestBackwardConsistency(unittest.TestCase):
         y_numpy = numpy_model.forward(x_np, training=True)
 
         # Verify Forward consistency
-        np.testing.assert_allclose(y_torch.detach().numpy(), y_numpy, rtol=1e-4, atol=1e-4)
+        np.testing.assert_allclose(
+            y_torch.detach().numpy(), y_numpy, rtol=1e-4, atol=1e-4
+        )
         print("Forward pass matched.")
 
         # 6. Backward Pass
@@ -59,7 +71,15 @@ class TestBackwardConsistency(unittest.TestCase):
 
         # In NumPy: dL/dy = 2 * y / total_elements (matching Torch's mean loss)
         grad_output = 2 * y_numpy / y_numpy.size
-        numpy_grads = numpy_model.backward(grad_output)
+        d_x_numpy, numpy_grads = numpy_model.backward(grad_output)
+
+        # Verify input gradient consistency
+        print("\nInput Gradient Consistency Check:")
+        assert x_torch.grad is not None
+        d_x_torch = x_torch.grad.numpy()
+        max_diff_x = np.abs(d_x_torch - d_x_numpy).max()
+        print(f" - {'x_input':16s} | Max Diff: {max_diff_x:.6e}")
+        np.testing.assert_allclose(d_x_torch, d_x_numpy, rtol=1e-3, atol=1e-3)
 
         # 7. Compare Gradients for major layers
         # Mapping names from NumPy model to PyTorch parameters
@@ -67,12 +87,21 @@ class TestBackwardConsistency(unittest.TestCase):
             ("in_proj.weight", torch_model.mamba.in_proj.weight),
             ("out_proj.weight", torch_model.mamba.out_proj.weight),
             ("conv1d.weight", torch_model.mamba.conv1d.weight),
+            ("x_proj.weight", torch_model.mamba.x_proj),
+            ("dt_proj.weight", torch_model.mamba.dt_proj.weight),
+            ("dt_proj.bias", torch_model.mamba.dt_proj.bias),
+            ("A_log", torch_model.mamba.A_log),
+            ("A_imag", torch_model.mamba.A_imag),
             ("D", torch_model.mamba.D),
         ]
 
         print("\nGradient Consistency Check:")
-        for name, torch_param in check_list:
-            grad = torch_param.grad
+        for name, torch_obj in check_list:
+            if hasattr(torch_obj, "weight"):
+                grad = torch_obj.weight.grad
+            else:
+                grad = getattr(torch_obj, "grad", None)
+
             assert grad is not None
             t_grad = grad.numpy()
             n_grad = numpy_grads[name]
@@ -88,6 +117,7 @@ class TestBackwardConsistency(unittest.TestCase):
             np.testing.assert_allclose(t_grad, n_grad, rtol=1e-3, atol=1e-3)
 
         print("\nBackward consistency test passed!")
+
 
 if __name__ == "__main__":
     unittest.main()
