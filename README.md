@@ -5,59 +5,53 @@
 <a name="english"></a>
 ## English Description
 
-This project provides a lightweight, **NumPy-only implementation** of the Mamba architecture tailored for edge devices. It allows you to train models using PyTorch in a development environment and deploy them to edge devices without requiring a heavy PyTorch installation.
+This project provides a lightweight, **NumPy-only implementation** of the Mamba architecture tailored for edge devices. Unlike other implementations, it supports **both inference and training (backpropagation)** using only NumPy, making it ideal for environments where PyTorch cannot be installed.
 
 ### Key Features
-- **Lightweight Inference**: Runs on pure NumPy. No PyTorch dependency required on the edge device.
-- **Training Compatibility**: Train with PyTorch, export weights, and run on NumPy.
-- **Sequential Scan**: Replaces parallel scan with a sequential loop for efficiency on CPU-bound edge devices.
+- **Lightweight Inference & Training**: Runs on pure NumPy. No PyTorch dependency required for both forward and backward passes.
+- **On-device Learning**: Fine-tune or train models directly on edge devices (CPU-only, no-Torch environments).
+- **Training Compatibility**: Supports a hybrid workflow—train with PyTorch in development and fine-tune with NumPy on the edge.
+- **Sequential Scan**: Optimized for CPU-bound edge devices using a sequential loop for both forward and backward selective scans.
+- **Built-in Optimizer**: Includes a pure NumPy implementation of the Adam optimizer.
 
 ### File Structure
-- `mamba_numpy.py`: The NumPy-based Mamba model implementation (Inference).
-- `run_edge.py`: Sample script to run inference using NumPy weights.
-- `train.py`: Training script using PyTorch.
-- `export_to_numpy.py`: Tool to convert PyTorch weights (`.pth`) to NumPy format (`.npz`).
-- `test_mamba.py`: Test to ensure outputs match between PyTorch and NumPy implementations.
+- `edge_mamba/numpy_model.py`: The NumPy-based Mamba model (Inference + **Backward/Training**).
+- `edge_mamba/torch_model.py`: PyTorch implementation for high-speed training on GPUs.
+- `scripts/train_numpy.py`: Sample script to train the model using **only NumPy**.
+- `scripts/train.py`: Training script using PyTorch.
+- `scripts/export_to_numpy.py`: Tool to convert PyTorch weights (`.pth`) to NumPy format (`.npz`).
+- `tests/test_backward_consistency.py`: Test to ensure gradients match exactly between PyTorch and NumPy.
 
 ### Installation
 
-**For Edge Devices (Inference only):**
+**For Edge Devices (NumPy only):**
 ```bash
 pip install .
 ```
-This installs only `numpy`.
 
-**For Development (Training/Testing):**
+**For Development (Training/Testing with PyTorch):**
 ```bash
 pip install .[dev]
 ```
-This installs `torch` and `numpy`.
 
 ### Workflow
 
-#### 1. Train (Development Environment)
-Train your model using PyTorch. This generates `mamba_model.pth`.
+#### Option A: NumPy-only Training (On-device Learning)
+Train or fine-tune directly on a device without PyTorch:
 ```bash
-python scripts/train.py
+python scripts/train_numpy.py
 ```
 
-#### 2. Export Weights (Development Environment)
-Convert the trained PyTorch weights to a NumPy-compatible format (`mamba_weights.npz`).
-```bash
-python scripts/export_to_numpy.py
-```
-
-#### 3. Inference (Edge Device)
-Transfer `mamba_numpy.py`, `run_edge.py`, and `mamba_weights.npz` to your edge device. Then run:
-```bash
-python scripts/run_edge.py
-```
-This script does **not** import torch.
+#### Option B: Hybrid Workflow (Train with Torch, Run with NumPy)
+1. **Train** with PyTorch: `python scripts/train.py`
+2. **Export** weights: `python scripts/export_to_numpy.py`
+3. **Inference** with NumPy: `python scripts/run_edge.py`
 
 ### Testing
-To verify that the NumPy implementation matches the PyTorch implementation exactly:
+To verify that the NumPy implementation (both forward and backward) matches the PyTorch implementation exactly:
 ```bash
 python tests/test_consistency.py
+python tests/test_backward_consistency.py
 ```
 
 ---
@@ -65,57 +59,51 @@ python tests/test_consistency.py
 <a name="japanese"></a>
 ## 日本語説明
 
-このプロジェクトは、エッジデバイス向けに最適化された**NumPyのみで動作するMamba実装**を提供します。開発環境ではPyTorchを使用して学習を行い、その学習済みモデルをPyTorchのインストールが不要なエッジデバイス上で動作させることができます。
+このプロジェクトは、エッジデバイス向けに最適化された**NumPyのみで動作するMamba実装**を提供します。他の実装とは異なり、推論だけでなく**学習（誤差逆伝播）もNumPyのみでサポート**しているため、PyTorchをインストールできない制限された環境での現地学習に最適です。
 
 ### 特徴
-- **軽量推論**: NumPyだけで動作します。エッジデバイスに巨大なPyTorchライブラリをインストールする必要はありません。
-- **学習互換性**: PyTorchで学習し、重みをエクスポートしてNumPyで実行できます。
-- **逐次スキャン**: エッジデバイス（CPU）での効率を考慮し、並列スキャン（Parallel Scan）を逐次ループ（Sequential Scan）に置き換えています。
+- **軽量な推論と学習**: NumPyだけで動作します。順伝播（Forward）と逆伝播（Backward）の両方でPyTorchへの依存はありません。
+- **現地学習 (On-device Learning)**: エッジデバイス（CPUのみ、Torchなし環境）で直接モデルの微調整や学習が可能です。
+- **ハイブリッドな開発**: 開発環境のGPUでPyTorchを使って高速に学習し、エッジ環境でNumPyを使って動作・微調整させるフローをサポートします。
+- **逐次スキャン**: エッジデバイス（CPU）での効率を考慮し、SSMのスキャン処理を順方向・逆方向ともに逐次ループで実装しています。
+- **組み込みオプティマイザ**: AdamオプティマイザをNumPyのみで実装して同梱しています。
 
 ### ファイル構成
-- `mamba_numpy.py`: NumPyベースのMambaモデル実装（推論用）。
-- `run_edge.py`: NumPy形式の重みを使って推論を行うサンプルスクリプト。
-- `train.py`: PyTorchを使用した学習スクリプト。
-- `export_to_numpy.py`: PyTorchの重み（`.pth`）をNumPy形式（`.npz`）に変換するツール。
-- `test_mamba.py`: PyTorch版とNumPy版の出力が一致することを確認するテスト。
+- `edge_mamba/numpy_model.py`: NumPyベースのMambaモデル（推論 + **学習/逆伝播**）。
+- `edge_mamba/torch_model.py`: GPU環境での高速学習用PyTorch実装。
+- `scripts/train_numpy.py`: **NumPyのみ**で学習を実行するサンプルスクリプト。
+- `scripts/train.py`: PyTorchを使用した学習スクリプト。
+- `scripts/export_to_numpy.py`: PyTorchの重み（`.pth`）をNumPy形式（`.npz`）に変換するツール。
+- `tests/test_backward_consistency.py`: PyTorch版とNumPy版で勾配計算が一致することを確認するテスト。
 
 ### インストール
 
-**エッジデバイス向け（推論のみ）:**
+**エッジデバイス向け（NumPyのみ）:**
 ```bash
 pip install .
 ```
-これにより `numpy` のみがインストールされます。
 
 **開発環境向け（学習・テスト）:**
 ```bash
 pip install .[dev]
 ```
-これにより `torch` と `numpy` がインストールされます。
 
 ### 実行フロー
 
-#### 1. 学習（開発環境）
-PyTorchを使ってモデルを学習させます。`mamba_model.pth` が生成されます。
+#### オプションA：NumPyのみで学習（現地学習）
+PyTorchのない環境で直接学習・微調整を行います。
 ```bash
-python scripts/train.py
+python scripts/train_numpy.py
 ```
 
-#### 2. 重みの変換（開発環境）
-学習済みのPyTorchの重みを、NumPyで読み込める形式（`mamba_weights.npz`）に変換します。
-```bash
-python scripts/export_to_numpy.py
-```
-
-#### 3. 推論（エッジデバイス）
-`mamba_numpy.py`、`run_edge.py`、`mamba_weights.npz` の3ファイルをエッジデバイスに転送し、実行します。
-```bash
-python scripts/run_edge.py
-```
-このスクリプトは `torch` を一切インポートせずに動作します。
+#### オプションB：ハイブリッド（Torchで学習、NumPyで実行）
+1. **学習**: `python scripts/train.py` (PyTorch)
+2. **変換**: `python scripts/export_to_numpy.py`
+3. **推論**: `python scripts/run_edge.py` (NumPy)
 
 ### テスト
-NumPy版の実装がPyTorch版と完全に同じ結果を出すか確認するには、以下を実行します。
+NumPy版の計算結果（順伝播・逆伝播）がPyTorch版と完全に一致するか確認するには、以下を実行します。
 ```bash
 python tests/test_consistency.py
+python tests/test_backward_consistency.py
 ```
