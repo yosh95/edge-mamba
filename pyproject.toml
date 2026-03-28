@@ -36,9 +36,10 @@ disallow_untyped_defs = false
 testpaths = ["tests"]
 python_files = "test_*.py"
 addopts = "-ra -q"
+pythonpath = ["."]
 
 [tool.ruff]
-line-length = 88
+line-length = 100
 target-version = "py311"
 
 [tool.ruff.lint]

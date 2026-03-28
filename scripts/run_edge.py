@@ -39,14 +39,16 @@ def run_inference() -> None:
     # Run token-by-token inference (step)
     print("\nRunning token-by-token inference (step)...")
     conv_state = None
-    ssm_state = None
-    prev_Bx = None
+    ssm_re = None
+    ssm_im = None
+    p_Bx_re = None
+    p_Bx_im = None
 
     step_outputs = []
     for i in range(x.shape[1]):
         token_input = x[:, i : i + 1, :]  # (Batch, 1, Dim)
-        out, conv_state, ssm_state, prev_Bx = model.step(
-            token_input, conv_state, ssm_state, prev_Bx
+        out, conv_state, ssm_re, ssm_im, p_Bx_re, p_Bx_im = model.step(
+            token_input, conv_state, ssm_re, ssm_im, p_Bx_re, p_Bx_im
         )
         step_outputs.append(out)
 

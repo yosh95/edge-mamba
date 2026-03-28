@@ -20,14 +20,15 @@ def test_mamba_mimo() -> None:
 
     # Test step (inference)
     conv_state = None
-    ssm_state = None
-    prev_Bx = None
+    ssm_re = None
+    ssm_im = None
+    p_Bx_re = None
+    p_Bx_im = None
 
     for i in range(seq_len):
         step_x = x[:, i : i + 1, :]
-        step_output, conv_state, ssm_state, prev_Bx = model.step(
-            step_x, conv_state, ssm_state, prev_Bx
-        )
+        res = model.step(step_x, conv_state, ssm_re, ssm_im, p_Bx_re, p_Bx_im)
+        step_output, conv_state, ssm_re, ssm_im, p_Bx_re, p_Bx_im = res
 
     print(f"Last step output shape: {step_output.shape}")
     assert step_output.shape == (batch_size, 1, d_model)

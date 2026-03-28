@@ -5,53 +5,29 @@
 <a name="english"></a>
 ## English Description
 
-This project provides a lightweight, **NumPy-only implementation** of the Mamba architecture tailored for edge devices. Unlike other implementations, it supports **both inference and training (backpropagation)** using only NumPy, making it ideal for environments where PyTorch cannot be installed.
+This project provides a lightweight, **real-valued (float32)** implementation of the Mamba architecture, specifically optimized for edge devices and real-time IDS (Intrusion Detection Systems).
 
 ### Key Features
-- **Lightweight Inference & Training**: Runs on pure NumPy. No PyTorch dependency required for both forward and backward passes.
-- **On-device Learning**: Fine-tune or train models directly on edge devices (CPU-only, no-Torch environments).
-- **Training Compatibility**: Supports a hybrid workflow—train with PyTorch in development and fine-tune with NumPy on the edge.
-- **Sequential Scan**: Optimized for CPU-bound edge devices using a sequential loop for both forward and backward selective scans.
-- **Built-in Optimizer**: Includes a pure NumPy implementation of the Adam optimizer.
+- **Real-valued Math**: 32-bit float real-valued pairs (64-bit complex equivalent) for maximum compatibility with ONNX and edge accelerators.
+- **Inference Optimized**: Includes a high-performance `step` function for processing data one packet/token at a time.
+- **Multi-Backend**: Support for **PyTorch**, **NumPy**, and **ONNX Runtime**.
+- **Mathematical Consistency**: Verified 10^-7 precision between all implementations.
 
-### File Structure
-- `edge_mamba/numpy_model.py`: The NumPy-based Mamba model (Inference + **Backward/Training**).
-- `edge_mamba/torch_model.py`: PyTorch implementation for high-speed training on GPUs.
-- `scripts/train_numpy.py`: Sample script to train the model using **only NumPy**.
-- `scripts/train.py`: Training script using PyTorch.
-- `scripts/export_to_numpy.py`: Tool to convert PyTorch weights (`.pth`) to NumPy format (`.npz`).
-- `tests/test_backward_consistency.py`: Test to ensure gradients match exactly between PyTorch and NumPy.
+### Performance (IDS Step Inference)
+Tested with `d_model=128, d_state=16, n_heads=8` on CPU.
 
-### Installation
+| Backend | Latency (1 step) | Throughput |
+| :--- | :--- | :--- |
+| **PyTorch (CPU)** | ~0.38 ms | 2,600 steps/s |
+| **NumPy** | **~0.15 ms** | **6,700 steps/s** |
+| **ONNX Runtime** | **~0.16 ms** | **6,300 steps/s** |
 
-**For Edge Devices (NumPy only):**
+### Usage (Makefile)
 ```bash
-pip install .
-```
-
-**For Development (Training/Testing with PyTorch):**
-```bash
-pip install .[dev]
-```
-
-### Workflow
-
-#### Option A: NumPy-only Training (On-device Learning)
-Train or fine-tune directly on a device without PyTorch:
-```bash
-python scripts/train_numpy.py
-```
-
-#### Option B: Hybrid Workflow (Train with Torch, Run with NumPy)
-1. **Train** with PyTorch: `python scripts/train.py`
-2. **Export** weights: `python scripts/export_to_numpy.py`
-3. **Inference** with NumPy: `python scripts/run_edge.py`
-
-### Testing
-To verify that the NumPy implementation (both forward and backward) matches the PyTorch implementation exactly:
-```bash
-python tests/test_consistency.py
-python tests/test_backward_consistency.py
+make help      # Show available commands
+make test      # Verify mathematical consistency
+make export    # Export 'step' function to ONNX (mamba_step_inference.onnx)
+make benchmark # Run performance benchmark
 ```
 
 ---
@@ -59,51 +35,41 @@ python tests/test_backward_consistency.py
 <a name="japanese"></a>
 ## 日本語説明
 
-このプロジェクトは、エッジデバイス向けに最適化された**NumPyのみで動作するMamba実装**を提供します。他の実装とは異なり、推論だけでなく**学習（誤差逆伝播）もNumPyのみでサポート**しているため、PyTorchをインストールできない制限された環境での現地学習に最適です。
+このプロジェクトは、エッジデバイスやリアルタイムIDS（侵入検知システム）向けに最適化された、**実数演算（float32）ベース**のMamba実装を提供します。
 
 ### 特徴
-- **軽量な推論と学習**: NumPyだけで動作します。順伝播（Forward）と逆伝播（Backward）の両方でPyTorchへの依存はありません。
-- **現地学習 (On-device Learning)**: エッジデバイス（CPUのみ、Torchなし環境）で直接モデルの微調整や学習が可能です。
-- **ハイブリッドな開発**: 開発環境のGPUでPyTorchを使って高速に学習し、エッジ環境でNumPyを使って動作・微調整させるフローをサポートします。
-- **逐次スキャン**: エッジデバイス（CPU）での効率を考慮し、SSMのスキャン処理を順方向・逆方向ともに逐次ループで実装しています。
-- **組み込みオプティマイザ**: AdamオプティマイザをNumPyのみで実装して同梱しています。
+- **実数演算の徹底**: 複素数演算を排除し、32bit実数ペア（64bit複素数相当）で再構成。ONNXやエッジNPUとの高い親和性を確保。
+- **推論特化型**: パケットやトークンを1つずつリアルタイムに処理する `step` 関数に最適化。
+- **マルチバックエンド**: **PyTorch**, **NumPy**, **ONNX Runtime** の3つをサポート。
+- **数学的等価性**: 全実装間で 10^-7 以上の精度で等価であることを検証済み。
+
+### パフォーマンス (IDS ステップ推論)
+`d_model=128, d_state=16, n_heads=8` を CPU で実行した結果です。
+
+| バックエンド | レイテンシ (1 step) | スループット |
+| :--- | :--- | :--- |
+| **PyTorch (CPU)** | 約 0.38 ms | 2,600 steps/s |
+| **NumPy** | **約 0.15 ms** | **6,700 steps/s** |
+| **ONNX Runtime** | **約 0.16 ms** | **6,300 steps/s** |
+
+*1パケットずつの処理において、NumPy/ONNX版はPyTorch(CPU)より約2.5倍高速です。*
+
+### 実行手順 (Makefile)
+```bash
+make help      # ヘルプを表示
+make test      # 各実装間の数学的等価性をテスト
+make export    # 推論用step関数をONNXに出力
+make benchmark # 性能ベンチマークを実行
+```
 
 ### ファイル構成
-- `edge_mamba/numpy_model.py`: NumPyベースのMambaモデル（推論 + **学習/逆伝播**）。
-- `edge_mamba/torch_model.py`: GPU環境での高速学習用PyTorch実装。
-- `scripts/train_numpy.py`: **NumPyのみ**で学習を実行するサンプルスクリプト。
-- `scripts/train.py`: PyTorchを使用した学習スクリプト。
-- `scripts/export_to_numpy.py`: PyTorchの重み（`.pth`）をNumPy形式（`.npz`）に変換するツール。
-- `tests/test_backward_consistency.py`: PyTorch版とNumPy版で勾配計算が一致することを確認するテスト。
+- `edge_mamba/torch_model.py`: PyTorch版。学習およびONNXへのエクスポートに使用。
+- `edge_mamba/numpy_model.py`: NumPy版。エッジでのスタンドアロン推論用（学習済みPyTorchモデルから重みをロードして使用）。
+- `scripts/export_onnx_step.py`: ONNXエクスポート用スクリプト（**PyTorchモデル**から推論用step関数のみを抽出）。
 
-### インストール
-
-**エッジデバイス向け（NumPyのみ）:**
-```bash
-pip install .
-```
-
-**開発環境向け（学習・テスト）:**
-```bash
-pip install .[dev]
-```
-
-### 実行フロー
-
-#### オプションA：NumPyのみで学習（現地学習）
-PyTorchのない環境で直接学習・微調整を行います。
-```bash
-python scripts/train_numpy.py
-```
-
-#### オプションB：ハイブリッド（Torchで学習、NumPyで実行）
-1. **学習**: `python scripts/train.py` (PyTorch)
-2. **変換**: `python scripts/export_to_numpy.py`
-3. **推論**: `python scripts/run_edge.py` (NumPy)
-
-### テスト
-NumPy版の計算結果（順伝播・逆伝播）がPyTorch版と完全に一致するか確認するには、以下を実行します。
-```bash
-python tests/test_consistency.py
-python tests/test_backward_consistency.py
-```
+### 推奨ワークフロー
+1. **学習**: GPU環境にて `torch_model.py` を用いて学習を行います。
+2. **ONNX変換**: `scripts/export_onnx_step.py` を使用して、**PyTorchの実装から**推論用ONNXファイルを生成します。（※NumPy実装からONNXへの変換はサポートしていません）
+3. **デプロイ**: エッジデバイス上で ONNX Runtime を使用するか、学習済み重みを `numpy_model.py` に読み込ませて推論を実行します。
+- `scripts/benchmark.py`: 性能比較用スクリプト。
+- `tests/test_step_consistency.py`: 数学的整合性検証テスト。
