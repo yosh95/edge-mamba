@@ -30,3 +30,4 @@ clean:
 	rm -f tests/temp_consistency.onnx
 	rm -rf __pycache__
 	rm -rf */__pycache__
+	rm -rf *.egg-info
