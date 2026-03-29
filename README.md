@@ -30,6 +30,17 @@ make export    # Export 'step' function to ONNX (mamba_step_inference.onnx)
 make benchmark # Run performance benchmark
 ```
 
+### World Model Example (Mamba-kun's Imagination)
+Located in `exemples/world_model/`, this example demonstrates how Mamba can be used as a **World Model** for reinforcement learning or robotics.
+
+**The Story:**
+"Mamba-kun" is a robot in a warehouse. It needs to learn the laws of physics (position, velocity, and distance to a target) by observing its movements. After training, Mamba-kun can "imagine" the future—predicting how its position will change and what rewards it will receive—entirely within its internal state, without actually moving.
+
+To run the simulation:
+```bash
+python exemples/world_model/simulate_story.py
+```
+
 ---
 
 <a name="japanese"></a>
@@ -60,6 +71,17 @@ make help      # ヘルプを表示
 make test      # 各実装間の数学的等価性をテスト
 make export    # 推論用step関数をONNXに出力
 make benchmark # 性能ベンチマークを実行
+```
+
+### ワールドモデルの例 (Mamba君の想像)
+`exemples/world_model/` にあるこのサンプルは、Mambaを強化学習やロボティクスにおける**ワールドモデル（世界モデル）**として利用する方法を示しています。
+
+**ストーリー:**
+「Mamba君」は倉庫で働くロボットです。彼は自分の動きを観察することで、物理法則（位置、速度、ターゲットまでの距離）を学習する必要があります。学習後、Mamba君は実際に動くことなく、自分の内部状態だけで将来を「想像」し、位置がどのように変化し、どのような報酬が得られるかを予測できるようになります。
+
+シミュレーションの実行方法:
+```bash
+python exemples/world_model/simulate_story.py
 ```
 
 ### ファイル構成
