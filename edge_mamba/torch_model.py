@@ -193,7 +193,7 @@ class CustomMamba(nn.Module):
         dtA_im = delta.unsqueeze(-1) * A_im.view(1, 1, H, 1, N)
 
         # alpha = exp(dtA) = exp(dtA_re) * (cos(dtA_im) + i*sin(dtA_im))
-        alpha_mag = torch.exp(torch.clamp(dtA_re, min=-20.0, max=20.0))
+        alpha_mag = torch.exp(torch.clamp(dtA_re, min=-20.0, max=0.0))
         alpha_re = alpha_mag * torch.cos(dtA_im)
         alpha_im = alpha_mag * torch.sin(dtA_im)
 
@@ -299,7 +299,7 @@ class CustomMamba(nn.Module):
         # Discretization
         dtA_re = delta.unsqueeze(-1) * A_re.view(1, self.n_heads, 1, self.d_state)
         dtA_im = delta.unsqueeze(-1) * A_im.view(1, self.n_heads, 1, self.d_state)
-        alpha_mag = torch.exp(torch.clamp(dtA_re, min=-20.0, max=20.0))
+        alpha_mag = torch.exp(torch.clamp(dtA_re, min=-20.0, max=0.0))
         alpha_re = alpha_mag * torch.cos(dtA_im)
         alpha_im = alpha_mag * torch.sin(dtA_im)
 
