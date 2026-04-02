@@ -9,15 +9,18 @@ description = "A lightweight, NumPy-only Mamba implementation optimized for Edge
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
-    "numpy>=1.20.0",
+    "torch",
+    "onnxruntime",
+    "onnx",
+    "onnxscript",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "torch>=2.0.0",
     "pytest",
     "ruff",
     "mypy",
+    "types-tabulate"
 ]
 
 [tool.mypy]
@@ -26,6 +29,7 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 ignore_missing_imports = true
+explicit_package_bases = true
 exclude = ["build/"]
 
 [[tool.mypy.overrides]]

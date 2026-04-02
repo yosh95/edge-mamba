@@ -387,20 +387,27 @@ def associative_scan_real(
     X_prime_re = (A_re_odd * X_re_even - A_im_odd * X_im_even) + X_re_odd
     X_prime_im = (A_re_odd * X_im_even + A_im_odd * X_re_even) + X_im_odd
 
+    # Y_prime_re/im: (B, L//2, D, N)
     Y_re_prime, Y_im_prime = associative_scan_real(A_prime_re, A_prime_im, X_prime_re, X_prime_im)
 
-    Y_re = torch.empty_like(A_re)
-    Y_im = torch.empty_like(A_im)
+    L_padded = A_re.shape[1]
+    Y_re = torch.empty((B, L_padded, D, N), device=A_re.device)
+    Y_im = torch.empty((B, L_padded, D, N), device=A_im.device)
+
+    # Even indices calculation: Y_even = A_even * Y_prev + X_even
+    # Y_prev is Y[t-1], which for even index 2k is odd index 2k-1
+    Y_re_prev = torch.cat(
+        [torch.zeros((B, 1, D, N), device=A_re.device), Y_re_prime[:, :-1]], dim=1
+    )
+    Y_im_prev = torch.cat(
+        [torch.zeros((B, 1, D, N), device=A_im.device), Y_im_prime[:, :-1]], dim=1
+    )
+
+    Y_re[:, 0::2] = (A_re_even * Y_re_prev - A_im_even * Y_im_prev) + X_re_even
+    Y_im[:, 0::2] = (A_re_even * Y_im_prev + A_im_even * Y_re_prev) + X_im_even
+
+    # Odd indices are simply the results from the recursive call
     Y_re[:, 1::2] = Y_re_prime
     Y_im[:, 1::2] = Y_im_prime
 
-    Y_re_prev = torch.cat([torch.zeros(B, 1, D, N, device=A_re.device), Y_re_prime[:, :-1]], dim=1)
-    Y_im_prev = torch.cat([torch.zeros(B, 1, D, N, device=A_im.device), Y_im_prime[:, :-1]], dim=1)
-
-    # Y_even = A_even * Y_prev + X_even
-    Y_re[:, 0::2] = (A_re_even * Y_re_prev - A_im_even * Y_im_prev) + X_re_even
-    Y_im[:, 0::2] = (A_re_even * Y_im_prev + A_im_even * Y_re_prev) + X_re_even
-
-    if is_odd:
-        return Y_re[:, :L], Y_im[:, :L]
-    return Y_re, Y_im
+    return Y_re[:, :L], Y_im[:, :L]
